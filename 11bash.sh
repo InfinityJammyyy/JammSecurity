@@ -6,7 +6,7 @@ if [[ $EUID -ne 0 ]]; then
     exit 1
 fi
 
-sudo apt update -y && sudo apt upgrade -y && sudo apt install -y dialog mawk
+sudo apt update -y && sudo apt upgrade -y && sudo apt install -y dialog mawk pam-pwquality
 
 # Function to create a backup of a file
 backup_file() {
@@ -26,7 +26,7 @@ backup_file() {
 install_packages() {
     while true; do
         cmd=(dialog --backtitle "Jamm Security" --title "Package Installer" \
-            --no-cancel --separate-output --ok-label "Install" --cancel-label "Exit" \
+            --no-cancel --separate-output --ok-label "Install" --extra-button --extra-label "Next" --cancel-label "Quit" \
             --checklist "Select the packages to install:" 20 70 10)
 
         options=(
@@ -44,7 +44,7 @@ install_packages() {
 
         if [[ $? -ne 0 ]]; then
             echo "Exiting installer."
-            exit 0
+            return
         fi
 
         clear
@@ -82,11 +82,12 @@ minclass = 3
 maxrepeat = 3
 maxsequence = 3
 reject_username = true
+enforce_for_root = 1
 EOL
 
     backup_file /etc/pam.d/common-password
     sed -i '/pam_pwquality.so/d' /etc/pam.d/common-password
-    echo 'password requisite pam_pwquality.so retry=3' >> /etc/pam.d/common-password
+    echo 'password requisite pam_pwquality.so retry=3 enforce_for_root' >> /etc/pam.d/common-password
 }
 
 configure_firewall() {
@@ -159,7 +160,7 @@ run_clamav() {
 # Main dialog interface
 while true; do
     cmd=(dialog --backtitle "Jamm Security" --title "Security Configuration Script" \
-        --no-cancel --separate-output --ok-label "Run Tasks" --cancel-label "Exit" \
+        --no-cancel --separate-output --ok-label "Run Tasks" --extra-button --extra-label "Next" --cancel-label "Quit" \
         --checklist "Select the tasks to execute:" 20 70 10)
 
     options=(
