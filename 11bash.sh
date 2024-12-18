@@ -26,7 +26,7 @@ backup_file() {
 install_packages() {
     while true; do
         cmd=(dialog --backtitle "Jamm Security" --title "Package Installer" \
-            --no-cancel --separate-output --ok-label "Install" --extra-button --extra-label "Next" --cancel-label "Quit" \
+            --no-cancel --separate-output --ok-label "Install" --extra-button --extra-label "Next" --cancel-label "Exit" \
             --checklist "Select the packages to install:" 20 70 10)
 
         options=(
@@ -82,12 +82,11 @@ minclass = 3
 maxrepeat = 3
 maxsequence = 3
 reject_username = true
-enforce_for_root = 1
 EOL
 
     backup_file /etc/pam.d/common-password
     sed -i '/pam_pwquality.so/d' /etc/pam.d/common-password
-    echo 'password requisite pam_pwquality.so retry=3 enforce_for_root' >> /etc/pam.d/common-password
+    echo 'password requisite pam_pwquality.so retry=3' >> /etc/pam.d/common-password
 }
 
 configure_firewall() {
@@ -137,6 +136,8 @@ misc_checks() {
     find / -xdev -type d \( -perm -0002 -a ! -perm -1000 \) -print >> "$output"
     echo "No-user files" >> "$output"
     find / -xdev \( -nouser -o -nogroup \) -print >> "$output"
+    echo "Enabled Services" >> "$output"
+    sudo systemctl list-unit-files --type=service >> "$output"
 }
 
 rootkit_check() {
@@ -157,10 +158,39 @@ run_clamav() {
     sudo clamscan --infected --remove --recursive / | tee ~/ClamAV_Report.txt
 }
 
+set_proper_permissions() {
+    echo 'Setting proper permissions...'
+    for user in $(awk -F: '$3 > 999 && $3 < 65534 {print $1}' /etc/passwd); do
+        [ -d /home/$user ] && sudo chmod -R 750 /home/$user
+    done
+    sudo chown root:shadow /etc/shadow
+    sudo chmod 640 /etc/shadow
+    sudo chown root:root /etc/passwd
+    sudo chmod 644 /etc/passwd
+    sudo chown root:root /etc/sudoers
+    sudo chmod 440 /etc/sudoers
+    sudo chown root:root /etc/group
+    sudo chmod 644 /etc/group
+    sudo chown -R www-data:www-data /var/www
+    sudo chmod -R 755 /var/www
+}
+
+configure_lightdm() {
+    echo 'Configuring LightDM...'
+    backup_file /etc/lightdm/lightdm.conf
+    sed -i '/allow-guest/d;/greeter-hide-users/d;/greeter-show-manual-login/d;/autologin-user/d' /etc/lightdm/lightdm.conf
+    cat <<EOL >> /etc/lightdm/lightdm.conf
+allow-guest=false
+greeter-hide-users=true
+greeter-show-manual-login=true
+autologin-user=none
+EOL
+}
+
 # Main dialog interface
 while true; do
     cmd=(dialog --backtitle "Jamm Security" --title "Security Configuration Script" \
-        --no-cancel --separate-output --ok-label "Run Tasks" --extra-button --extra-label "Next" --cancel-label "Quit" \
+        --no-cancel --separate-output --ok-label "Run Tasks" --extra-button --extra-label "Next" --cancel-label "Exit" \
         --checklist "Select the tasks to execute:" 20 70 10)
 
     options=(
@@ -173,6 +203,8 @@ while true; do
         7 "Rootkit Check" off
         8 "Run Lynis Security Audit" off
         9 "Run ClamAV Scan" off
+        10 "Set Proper Permissions" off
+        11 "Configure LightDM" off
     )
 
     choices=$("${cmd[@]}" "${options[@]}" 2>&1 >/dev/tty)
@@ -195,6 +227,8 @@ while true; do
             7) rootkit_check ;;
             8) run_lynis ;;
             9) run_clamav ;;
+            10) set_proper_permissions ;;
+            11) configure_lightdm ;;
         esac
     done
 
