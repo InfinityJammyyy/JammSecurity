@@ -1,6 +1,22 @@
 #!/bin/bash
-
-## Run this as non-root script ###
+echo ''
+echo '      ██                                  '
+echo '     ░██                                  '
+echo '     ░██  ██████   ██████████  ██████████ '
+echo '     ░██ ░░░░░░██ ░░██░░██░░██░░██░░██░░██'
+echo '     ░██  ███████  ░██ ░██ ░██ ░██ ░██ ░██'
+echo ' ██  ░██ ██░░░░██  ░██ ░██ ░██ ░██ ░██ ░██'
+echo '░░█████ ░░████████ ███ ░██ ░██ ███ ░██ ░██'
+echo ' ░░░░░   ░░░░░░░░ ░░░  ░░  ░░ ░░░  ░░  ░░ '
+echo '  ████████                                ██   ██           '
+echo ' ██░░░░░░                                ░░   ░██    ██   ██'
+echo '░██         █████   █████  ██   ██ ██████ ██ ██████ ░░██ ██ '
+echo '░█████████ ██░░░██ ██░░░██░██  ░██░░██░░█░██░░░██░   ░░███  '
+echo '░░░░░░░░██░███████░██  ░░ ░██  ░██ ░██ ░ ░██  ░██     ░██   '
+echo '       ░██░██░░░░ ░██   ██░██  ░██ ░██   ░██  ░██     ██    '
+echo ' ████████ ░░██████░░█████ ░░██████░███   ░██  ░░██   ██     '
+echo '░░░░░░░░   ░░░░░░  ░░░░░   ░░░░░░ ░░░    ░░    ░░   ░░      '
+echo ''
 if [[ $EUID -eq 0 ]]; then
     echo "Do not run this script as root (sudo)"
     exit 1
@@ -8,9 +24,8 @@ fi
 
 sudo -v || { echo "Sudo privileges required."; exit 1; }
 
-sudo apt update -y && sudo apt upgrade -y && sudo apt install -y dialog mawk
+sudo apt update -y && sudo apt upgrade -y && sudo apt install -y dialog
 
-# Function to create a backup of a file
 backup_file() {
     local file=$1
     if [[ -f $file ]]; then
@@ -24,7 +39,6 @@ backup_file() {
     fi
 }
 
-# Function to install individual packages
 install_packages() {
     while true; do
         cmd=(dialog --backtitle "Jamm Security" --title "Package Installer" \
@@ -70,7 +84,6 @@ install_packages() {
 
 install_packages
 
-# Functions to handle each security task
 run_auditing() {
     echo 'Setting up auditing...'
     sudo auditctl -e 1
@@ -192,7 +205,6 @@ autologin-user=none
 EOL
 }
 
-# Main dialog interface
 while true; do
     cmd=(dialog --backtitle "Jamm Security" --title "Security Configuration Script" \
         --separate-output --ok-label "Run Tasks" --cancel-label "Quit" \
