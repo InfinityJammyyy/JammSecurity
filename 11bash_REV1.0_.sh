@@ -177,7 +177,7 @@ add_user() {
       break
     fi
     if [[ -n $new_user ]]; then
-      if sudo useradd "$new_user" && sudo passwd "$new_user"; then
+      if sudo useradd -m "$new_user" && sudo passwd "$new_user"; then
         dialog --msgbox "User $new_user has been added." 10 40
       else
         dialog --msgbox "Failed to add user $new_user. Please check your input." 10 40
