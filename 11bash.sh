@@ -1,22 +1,6 @@
 #!/bin/bash
-echo ''
-echo '      ██                                  '
-echo '     ░██                                  '
-echo '     ░██  ██████   ██████████  ██████████ '
-echo '     ░██ ░░░░░░██ ░░██░░██░░██░░██░░██░░██'
-echo '     ░██  ███████  ░██ ░██ ░██ ░██ ░██ ░██'
-echo ' ██  ░██ ██░░░░██  ░██ ░██ ░██ ░██ ░██ ░██'
-echo '░░█████ ░░████████ ███ ░██ ░██ ███ ░██ ░██'
-echo ' ░░░░░   ░░░░░░░░ ░░░  ░░  ░░ ░░░  ░░  ░░ '
-echo '  ████████                                ██   ██           '
-echo ' ██░░░░░░                                ░░   ░██    ██   ██'
-echo '░██         █████   █████  ██   ██ ██████ ██ ██████ ░░██ ██ '
-echo '░█████████ ██░░░██ ██░░░██░██  ░██░░██░░█░██░░░██░   ░░███  '
-echo '░░░░░░░░██░███████░██  ░░ ░██  ░██ ░██ ░ ░██  ░██     ░██   '
-echo '       ░██░██░░░░ ░██   ██░██  ░██ ░██   ░██  ░██     ██    '
-echo ' ████████ ░░██████░░█████ ░░██████░███   ░██  ░░██   ██     '
-echo '░░░░░░░░   ░░░░░░  ░░░░░   ░░░░░░ ░░░    ░░    ░░   ░░      '
-echo ''
+
+## Run this as non-root script ###
 if [[ $EUID -eq 0 ]]; then
     echo "Do not run this script as root (sudo)"
     exit 1
@@ -24,8 +8,9 @@ fi
 
 sudo -v || { echo "Sudo privileges required."; exit 1; }
 
-sudo apt update -y && sudo apt upgrade -y && sudo apt install -y dialog
+sudo apt update -y && sudo apt upgrade -y && sudo apt install -y dialog mawk
 
+# Function to create a backup of a file
 backup_file() {
     local file=$1
     if [[ -f $file ]]; then
@@ -39,6 +24,7 @@ backup_file() {
     fi
 }
 
+# Function to install individual packages
 install_packages() {
     while true; do
         cmd=(dialog --backtitle "Jamm Security" --title "Package Installer" \
@@ -83,6 +69,122 @@ install_packages() {
 }
 
 install_packages
+
+list_users() {
+  users=$(cut -d: -f1 /etc/passwd)
+  menu_items=()
+  for user in $users; do
+    menu_items+=("$user" "$user")
+  done
+
+  selected_user=$(dialog --stdout --menu "Select a user" 20 50 15 "${menu_items[@]}")
+  echo "$selected_user"
+}
+
+list_human_users() {
+  human_users=$(awk -F: '($3 >= 1000 && $3 < 65534) {print $1}' /etc/passwd)
+  menu_items=()
+  for user in $human_users; do
+    menu_items+=("$user" "$user")
+  done
+
+  selected_user=$(dialog --stdout --menu "Select a user" 20 50 15 "${menu_items[@]}")
+  echo "$selected_user"
+}
+
+view_user_stats() {
+  local user=$1
+
+  if id "$user" &>/dev/null; then
+    sudo_status=$(sudo -l -U "$user" 2>/dev/null | grep -q "(ALL)" && echo "Yes" || echo "No")
+    groups=$(id -nG "$user")
+    pids=$(pgrep -u "$user" | tr '\n' ' ')
+
+    dialog --msgbox "User: $user\nSudo: $sudo_status\nGroups: $groups\nPIDs: ${pids:-None}" 15 50
+  else
+    dialog --msgbox "User $user does not exist." 10 40
+  fi
+}
+
+toggle_sudo() {
+  local user=$1
+  if id "$user" &>/dev/null; then
+    if groups "$user" | grep -qw sudo; then
+      sudo deluser "$user" sudo
+      dialog --msgbox "Removed sudo privileges from $user." 10 40
+    else
+      sudo adduser "$user" sudo
+      dialog --msgbox "Granted sudo privileges to $user." 10 40
+    fi
+  else
+    dialog --msgbox "User $user does not exist." 10 40
+  fi
+}
+
+remove_user() {
+  local user=$1
+  if id "$user" &>/dev/null; then
+    dialog --yesno "Are you sure you want to remove $user?" 10 40
+    if [[ $? -eq 0 ]]; then
+      dialog --yesno "Do you want to delete the home directory for $user?" 10 40
+      local delete_home=$?
+      if [[ $delete_home -eq 0 ]]; then
+        sudo userdel -r "$user"
+      else
+        sudo userdel "$user"
+      fi
+      dialog --msgbox "User $user has been removed." 10 40
+    fi
+  else
+    dialog --msgbox "User $user does not exist." 10 40
+  fi
+}
+
+add_user() {
+  new_user=$(dialog --stdout --inputbox "Enter the new username:" 10 40)
+  if [[ -n $new_user ]]; then
+    sudo useradd "$new_user" && sudo passwd "$new_user"
+    dialog --msgbox "User $new_user has been added." 10 40
+  fi
+}
+
+while true; do
+  action=$(dialog --stdout --no-cancel --menu "User Management" 20 50 10 \
+    1 "List All Users" \
+    2 "List Human Users" \
+    3 "Add User" \
+    4 "Exit")
+
+  case $action in
+    1)
+      list_users
+      ;;
+    2)
+      user=$(list_human_users)
+      if [[ -n $user ]]; then
+        choice=$(dialog --stdout --menu "Manage $user" 20 50 10 \
+          1 "View Stats" \
+          2 "Toggle Sudo Privileges" \
+          3 "Remove User")
+
+        case $choice in
+          1) view_user_stats "$user" ;;
+          2) toggle_sudo "$user" ;;
+          3) remove_user "$user" ;;
+        esac
+      fi
+      ;;
+    3)
+      add_user
+      ;;
+    4)
+      break
+      ;;
+  esac
+
+done
+
+clear
 
 run_auditing() {
     echo 'Setting up auditing...'
@@ -255,3 +357,4 @@ done
 
 echo "All selected tasks completed. Exiting script."
 exit 0
+
