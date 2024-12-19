@@ -10,17 +10,24 @@ sudo -v || { echo "Sudo privileges required."; exit 1; }
 
 sudo apt update -y && sudo apt upgrade -y && sudo apt install -y dialog mawk
 
-# Function to create a backup of a file
 backup_file() {
     local file=$1
     if [[ -f $file ]]; then
-        local backup="$file.bak"
+        local backup="${file}.bak"
         local count=1
         while [[ -f $backup ]]; do
-            backup="$file.bak$count"
+            backup="${file}.bak${count}"
             ((count++))
         done
-        sudo cp "$file" "$backup"
+        if sudo cp "$file" "$backup"; then
+            echo "Backup created: $backup"
+        else
+            echo "Error: Failed to create backup for $file."
+            return 1
+        fi
+    else
+        echo "Error: File '$file' does not exist."
+        return 1
     fi
 }
 
@@ -57,7 +64,7 @@ install_packages() {
                 2) sudo apt install -y clamav ;;
                 3) sudo apt install -y ufw ;;
                 4) sudo apt install -y fail2ban ;;
-                5) sudo apt install -y libpam-pwquality ;;
+                5) sudo apt install -y libpam-pwquality libpam-modules;;
                 6) sudo apt install -y auditd ;;
                 7) sudo apt install -y chkrootkit ;;
                 8) sudo apt install -y rkhunter ;;
@@ -70,6 +77,8 @@ install_packages() {
 
 install_packages
 
+### USER MANAGEMENT PROGRAM ###
+
 list_users() {
   users=$(cut -d: -f1 /etc/passwd)
   menu_items=()
@@ -77,7 +86,7 @@ list_users() {
     menu_items+=("$user" "$user")
   done
 
-  selected_user=$(dialog --stdout --menu "Select a user" 20 50 15 "${menu_items[@]}")
+  selected_user=$(dialog --backtitle "Jamm Security" --stdout --menu "Select a user" 20 50 15 "${menu_items[@]}")
   echo "$selected_user"
 }
 
@@ -88,21 +97,25 @@ list_human_users() {
     menu_items+=("$user" "$user")
   done
 
-  selected_user=$(dialog --stdout --menu "Select a user" 20 50 15 "${menu_items[@]}")
+  selected_user=$(dialog --backtitle "Jamm Security" --stdout --menu "Select a user" 20 50 15 "${menu_items[@]}")
   echo "$selected_user"
 }
 
 view_user_stats() {
   local user=$1
-
   if id "$user" &>/dev/null; then
-    sudo_status=$(sudo -l -U "$user" 2>/dev/null | grep -q "(ALL)" && echo "Yes" || echo "No")
+    if groups "$user" | grep -qwE 'sudo|wheel'; then
+      sudo_status="Yes"
+    else
+      sudo_status="No"
+    fi
+
     groups=$(id -nG "$user")
     pids=$(pgrep -u "$user" | tr '\n' ' ')
 
     dialog --msgbox "User: $user\nSudo: $sudo_status\nGroups: $groups\nPIDs: ${pids:-None}" 15 50
   else
-    dialog --msgbox "User $user does not exist." 10 40
+    dialog --msgbox "Error: User '$user' does not exist." 10 50
   fi
 }
 
@@ -141,28 +154,58 @@ remove_user() {
 }
 
 add_user() {
-  new_user=$(dialog --stdout --inputbox "Enter the new username:" 10 40)
-  if [[ -n $new_user ]]; then
-    sudo useradd "$new_user" && sudo passwd "$new_user"
-    dialog --msgbox "User $new_user has been added." 10 40
-  fi
+  while true; do
+    new_user=$(dialog --backtitle "Jamm Security" --stdout --inputbox "Enter the new username:" 10 40)
+    if [[ $? -ne 0 ]]; then
+      break
+    fi
+    if [[ -n $new_user ]]; then
+      if sudo useradd "$new_user" && sudo passwd "$new_user"; then
+        dialog --msgbox "User $new_user has been added." 10 40
+      else
+        dialog --msgbox "Failed to add user $new_user. Please check your input." 10 40
+      fi
+    else
+      dialog --msgbox "No username provided. Returning to the Add User menu." 10 40
+    fi
+  done
 }
 
+# Main Menu
 while true; do
-  action=$(dialog --stdout --no-cancel --menu "User Management" 20 50 10 \
+  action=$(dialog --backtitle "Jamm Security" --stdout --menu "User Management" 20 50 10 \
     1 "List All Users" \
     2 "List Human Users" \
     3 "Add User" \
-    4 "Exit")
+    4 "Next")
 
   case $action in
     1)
-      list_users
+      while true; do
+        user=$(list_users)
+        if [[ -z $user ]]; then
+          break
+        fi
+        choice=$(dialog --backtitle "Jamm Security" --stdout --menu "Manage $user" 20 50 10 \
+          1 "View Stats" \
+          2 "Toggle Sudo Privileges" \
+          3 "Remove User")
+
+
+        case $choice in
+          1) view_user_stats "$user" ;;
+          2) toggle_sudo "$user" ;;
+          3) remove_user "$user" ;;
+        esac
+      done
       ;;
     2)
-      user=$(list_human_users)
-      if [[ -n $user ]]; then
-        choice=$(dialog --stdout --menu "Manage $user" 20 50 10 \
+      while true; do
+        user=$(list_human_users)
+        if [[ -z $user ]]; then
+          break
+        fi
+        choice=$(dialog --backtitle "Jamm Security" --stdout --menu "Manage $user" 20 50 10 \
           1 "View Stats" \
           2 "Toggle Sudo Privileges" \
           3 "Remove User")
@@ -172,19 +215,14 @@ while true; do
           2) toggle_sudo "$user" ;;
           3) remove_user "$user" ;;
         esac
-      fi
+      done
       ;;
-    3)
-      add_user
-      ;;
-    4)
-      break
-      ;;
+    3) add_user ;;
+    4) break ;;
   esac
-
 done
 
-clear
+### END USER MANAGEMENT SCRIPT ###
 
 run_auditing() {
     echo 'Setting up auditing...'
@@ -193,9 +231,10 @@ run_auditing() {
 
 configure_pam_pwquality() {
     echo 'Configuring PAM pwquality...'
-    backup_file /etc/security/pwquality.conf
 
-    cat <<EOL | sudo tee /etc/security/pwquality.conf
+    # Backup and configure /etc/security/pwquality.conf
+    backup_file /etc/security/pwquality.conf
+    sudo tee /etc/security/pwquality.conf > /dev/null <<EOL
 minlen = 12
 minclass = 3
 maxrepeat = 3
@@ -203,10 +242,21 @@ maxsequence = 3
 reject_username = true
 EOL
 
+    # Backup and configure /etc/pam.d/common-password
     backup_file /etc/pam.d/common-password
     sudo sed -i '/pam_pwquality.so/d' /etc/pam.d/common-password
-    echo 'password requisite pam_pwquality.so retry=3' | sudo tee -a /etc/pam.d/common-password
+    if ! sudo grep -q 'pam_pwquality.so' /etc/pam.d/common-password; then
+        echo 'password requisite pam_pwquality.so retry=3 enforce_for_root' | sudo tee -a /etc/pam.d/common-password > /dev/null
+    fi
+
+    # Backup and configure /etc/pam.d/common-auth
+    backup_file /etc/pam.d/common-auth
+    sudo sed -i '/pam_faillock.so/d' /etc/pam.d/common-auth
+    if ! sudo grep -q 'pam_faillock.so' /etc/pam.d/common-auth; then
+        echo 'auth required pam_faillock.so deny=5 unlock_time=1800 fail_interval=900' | sudo tee -a /etc/pam.d/common-auth > /dev/null
+    fi
 }
+
 
 configure_firewall() {
     echo 'Setting up firewall...'
@@ -357,4 +407,3 @@ done
 
 echo "All selected tasks completed. Exiting script."
 exit 0
-
