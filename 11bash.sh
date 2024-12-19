@@ -1,6 +1,5 @@
 #!/bin/bash
 
-## Run this as non-root script ###
 if [[ $EUID -eq 0 ]]; then
     echo "Do not run this script as root (sudo)"
     exit 1
@@ -31,7 +30,6 @@ backup_file() {
     fi
 }
 
-# Function to install individual packages
 install_packages() {
     while true; do
         cmd=(dialog --backtitle "Jamm Security" --title "Package Installer" \
@@ -171,7 +169,6 @@ add_user() {
   done
 }
 
-# Main Menu
 while true; do
   action=$(dialog --backtitle "Jamm Security" --stdout --menu "User Management" 20 50 10 \
     1 "List All Users" \
@@ -229,12 +226,12 @@ run_auditing() {
     sudo auditctl -e 1
 }
 
-configure_pam_pwquality() {
-    echo 'Configuring PAM pwquality...'
 
-    # Backup and configure /etc/security/pwquality.conf
-    backup_file /etc/security/pwquality.conf
-    sudo tee /etc/security/pwquality.conf > /dev/null <<EOL
+configure_pam_pwquality() {
+echo 'Configuring PAM pwquality...'
+
+backup_file /etc/security/pwquality.conf
+sudo tee /etc/security/pwquality.conf > /dev/null <<EOL
 minlen = 12
 minclass = 3
 maxrepeat = 3
@@ -242,19 +239,12 @@ maxsequence = 3
 reject_username = true
 EOL
 
-    # Backup and configure /etc/pam.d/common-password
-    backup_file /etc/pam.d/common-password
-    sudo sed -i '/pam_pwquality.so/d' /etc/pam.d/common-password
-    if ! sudo grep -q 'pam_pwquality.so' /etc/pam.d/common-password; then
-        echo 'password requisite pam_pwquality.so retry=3 enforce_for_root' | sudo tee -a /etc/pam.d/common-password > /dev/null
-    fi
+backup_file /etc/pam.d/common-password
+sudo sed -i '/pam_pwquality.so/d' /etc/pam.d/common-password
+if ! sudo grep -q 'pam_pwquality.so' /etc/pam.d/common-password; then
+echo 'password requisite pam_pwquality.so retry=3 enforce_for_root' | sudo tee -a /etc/pam.d/common-password > /dev/null
+fi
 
-    # Backup and configure /etc/pam.d/common-auth
-    backup_file /etc/pam.d/common-auth
-    sudo sed -i '/pam_faillock.so/d' /etc/pam.d/common-auth
-    if ! sudo grep -q 'pam_faillock.so' /etc/pam.d/common-auth; then
-        echo 'auth required pam_faillock.so deny=5 unlock_time=1800 fail_interval=900' | sudo tee -a /etc/pam.d/common-auth > /dev/null
-    fi
 }
 
 
