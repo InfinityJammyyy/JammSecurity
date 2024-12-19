@@ -4,6 +4,8 @@ I am not a proffecinal (mispelled like a true professional) when it comes to bas
 
 Anyway cool logo time!!!!:
 
+
+,,,
       ██                                  
      ░██                                  
      ░██  ██████   ██████████  ██████████ 
@@ -20,6 +22,8 @@ Anyway cool logo time!!!!:
        ░██░██░░░░ ░██   ██░██  ░██ ░██   ░██  ░██     ██    
  ████████ ░░██████░░█████ ░░██████░███   ░██  ░░██   ██     
 ░░░░░░░░   ░░░░░░  ░░░░░   ░░░░░░ ░░░    ░░    ░░   ░░      
+
+,,,
 
 Ohh yea its Jammin time™
     -Jeff Bezos once in the past probably 
