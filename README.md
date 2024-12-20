@@ -67,7 +67,7 @@ Set Up IDS:
 
 Implement tools like AIDE, Snort, or Suricata for intrusion detection.
 
-5. SSH Hardening [✓]
+5. SSH Hardening
 
 Recommendations:
 
