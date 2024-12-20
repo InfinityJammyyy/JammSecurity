@@ -42,3 +42,5 @@ install_packages() {
         break
     done
 }
+
+install_packages
